@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#070907;font-family:'JetBrains Mono',ui-monospace,Menlo,monospace}
+  .scr::-webkit-scrollbar{width:10px;height:10px}
+  .scr::-webkit-scrollbar-thumb{background:#1c2a1c;border-radius:6px}
+  .scr::-webkit-scrollbar-track{background:transparent}
+  input.termin{background:transparent;border:none;outline:none;color:#b6ff8f;font:inherit;flex:1;caret-color:#79d979}
+  input.fld{background:#0a0f0a;border:1px solid #24361f;color:#cfeecf;font:inherit;border-radius:5px;padding:6px 8px;outline:none}
+  input.fld:focus{border-color:#3a5a34}
+  .tbtn{cursor:pointer;user-select:none;transition:background .1s,border-color .1s}
+</style>
+</helmet>
+<div style="padding:30px 44px 0;color:#cfeecf">
+  <div style="font-size:22px;font-weight:700;color:#b6ff8f;letter-spacing:.01em">Embedded Systems Lab &middot; Live AES-256 Key Recovery</div>
+  <div style="color:#5f8a5f;font-size:13px;margin-top:6px;max-width:1100px;line-height:1.6">Case&nbsp;8842 &mdash; a seized ACME IoT-Cam (Cortex-M4, 8&nbsp;KiB SRAM). Recover the AES-256 key that its firmware pins in RAM, then design it out. Two interaction models to compare: <a href="#1a" style="color:#5fd0e0;text-decoration:none">1a simulated shell</a> &middot; <a href="#1b" style="color:#5fd0e0;text-decoration:none">1b guided field kit</a>. Same image, same tools. Plan for ~15&ndash;25&nbsp;min.</div>
+</div>
+
+<div style="padding:6px 44px 0">
+  <div style="width:2804px;max-width:100%;border:1px solid #1e2c1e;border-radius:10px;background:#0b0f0b;padding:20px 24px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:4px">
+      <span style="color:#9fe6ff;font-weight:700;font-size:14px;letter-spacing:.08em">HOW TO RUN THIS LAB</span>
+      <span style="color:#4f7a4f;font-size:12px">nothing here spells out the key &mdash; you have to dig for it with the scripts</span>
+    </div>
+    <div style="display:flex;gap:40px;flex-wrap:wrap;margin-top:14px">
+
+      <div style="flex:1;min-width:300px">
+        <div style="color:#e8b04b;font-size:12px;font-weight:700;margin-bottom:8px">1a &middot; SIMULATED SHELL</div>
+        <div style="color:#8fb98f;font-size:12.5px;line-height:1.85">
+          Click the terminal, <span style="color:#b6ff8f">type a command</span> and press <span style="color:#b6ff8f">Enter</span>.<br>
+          <span style="color:#5fd0e0">&uarr;/&darr;</span> recall previous commands.<br>
+          <span style="color:#b6ff8f">help</span> lists every tool; <span style="color:#b6ff8f">cat notes.txt</span> is the brief.<br>
+          <span style="color:#b6ff8f">man &lt;tool&gt;</span> / <span style="color:#b6ff8f">cat tools/&lt;tool&gt;.py</span> explain what a script does before you trust it.<br>
+          Click any <span style="color:#5fd0e0">mission step</span> on the left for a hint on that stage.
+        </div>
+      </div>
+
+      <div style="flex:1;min-width:300px">
+        <div style="color:#e8b04b;font-size:12px;font-weight:700;margin-bottom:8px">1b &middot; GUIDED FIELD KIT</div>
+        <div style="color:#8fb98f;font-size:12.5px;line-height:1.85">
+          Same engine, no typing. <span style="color:#b6ff8f">Click a tool</span> to run it; output prints in the log.<br>
+          Work top row first: <span style="color:#b6ff8f">trigger crypto</span> &rarr; <span style="color:#b6ff8f">SWD halt + dump</span>.<br>
+          To inspect a candidate, set <span style="color:#b6ff8f">off</span> (e.g. <span style="color:#5fd0e0">0x0600</span>) and <span style="color:#b6ff8f">len</span>, then run <span style="color:#b6ff8f">histogram</span>, <span style="color:#b6ff8f">keyschedule</span> or <span style="color:#b6ff8f">carve</span>.<br>
+          Paste the 64 hex chars into <span style="color:#b6ff8f">submit key</span> and press submit.
+        </div>
+      </div>
+
+      <div style="flex:1.3;min-width:340px">
+        <div style="color:#e8b04b;font-size:12px;font-weight:700;margin-bottom:8px">YOUR OBJECTIVE</div>
+        <div style="color:#8fb98f;font-size:12.5px;line-height:1.8">
+          Recover the firmware&rsquo;s live <span style="color:#cfeecf">AES-256</span> key (32 raw bytes) from the SRAM image and <span style="color:#cfeecf">submit</span> it.<br><br>
+          <span style="color:#e8b04b">Ground rules &mdash;</span> the answer is <span style="color:#cfeecf">not</span> labelled anywhere. Several regions look equally random; most are decoys. Read each tool&rsquo;s note (<span style="color:#b6ff8f">man</span> / <span style="color:#b6ff8f">cat tools/&hellip;</span>) to understand what it can and cannot prove, then decide your own sequence. The brief in <span style="color:#b6ff8f">notes.txt</span> tells you what a real key leaves behind &mdash; the rest is your call.<br><br>
+          Stuck? Each numbered <span style="color:#5fd0e0">mission step</span> gives a nudge without giving the answer. Finish with <span style="color:#cfeecf">debrief</span>.
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div style="display:flex;gap:44px;padding:24px 44px 60px;align-items:flex-start;flex-wrap:wrap">
+
+  <!-- ============ OPTION 1a : SIMULATED SHELL ============ -->
+  <div id="1a" style="width:1380px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <span style="background:#16240f;border:1px solid #3a5a34;color:#b6ff8f;font-weight:700;font-size:13px;padding:2px 9px;border-radius:5px">1a</span>
+      <span style="color:#9fdf9f;font-size:13px;font-weight:600">Simulated shell &mdash; type real commands, get real output</span>
+      <a href="#1b" style="color:#5fd0e0;font-size:12px;text-decoration:none;margin-left:auto">compare 1b &rarr;</a>
+    </div>
+    <div style="height:860px;border:1px solid #1e2c1e;border-radius:10px;overflow:hidden;background:#0b0f0b;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#0d130d;border-bottom:1px solid #172417">
+        <span style="width:11px;height:11px;border-radius:50%;background:#ff5f56;display:inline-block"></span>
+        <span style="width:11px;height:11px;border-radius:50%;background:#ffbd2e;display:inline-block"></span>
+        <span style="width:11px;height:11px;border-radius:50%;background:#27c93f;display:inline-block"></span>
+        <span style="color:#6f9a6f;font-size:12px;margin-left:8px">analyst@lab &mdash; sram-recovery &mdash; case-8842</span>
+      </div>
+      <div style="flex:1;display:flex;min-height:0">
+        <div class="scr" style="width:300px;flex:none;border-right:1px solid #172417;padding:18px 16px;background:#0b0f0b;overflow:auto">
+          <div style="color:#9fe6ff;font-weight:700;font-size:12px;letter-spacing:.14em">MISSION STEPS</div>
+          <div style="color:#4f7a4f;font-size:11px;margin:4px 0 14px">click a step for guidance</div>
+          <sc-for list="{{ aSteps }}" as="s" hint-placeholder-count="7">
+            <div class="tbtn" onClick="{{ s.go }}" style="display:flex;gap:9px;padding:7px 6px;border-radius:6px;margin-bottom:3px;align-items:flex-start" style-hover="background:#101610">
+              <span style="{{ s.numStyle }}">{{ s.n }}</span>
+              <span style="{{ s.labStyle }}">{{ s.l }}</span>
+            </div>
+          </sc-for>
+          <div style="margin-top:18px;border-top:1px solid #1a271a;padding-top:12px;color:#4f7a4f;font-size:11px;line-height:1.65">brief: recover the live <span style="color:#79d979">AES-256</span> key from the 8&nbsp;KiB SRAM image, then answer <span style="color:#e8b04b">where it should have lived</span>. Start with <span style="color:#b6ff8f">cat notes.txt</span>.</div>
+        </div>
+        <div class="scr" ref="{{ aRef }}" onClick="{{ aFocus }}" style="flex:1;overflow:auto;padding:16px 18px;font-size:13px;line-height:1.55;background:#080b08;min-height:0">
+          <sc-for list="{{ aLines }}" as="line" hint-placeholder-count="4">
+            <div style="{{ line.style }}">{{ line.t }}</div>
+          </sc-for>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
+            <span style="color:#c9a15a;flex:none">analyst@lab:~/case-8842$</span>
+            <input class="termin" value="{{ aInput }}" onChange="{{ aChange }}" onKeyDown="{{ aKey }}" ref="{{ aInRef }}" spellcheck="false" autoComplete="off" autoCapitalize="off" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ OPTION 1b : GUIDED FIELD KIT ============ -->
+  <div id="1b" style="width:1380px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <span style="background:#16240f;border:1px solid #3a5a34;color:#b6ff8f;font-weight:700;font-size:13px;padding:2px 9px;border-radius:5px">1b</span>
+      <span style="color:#9fdf9f;font-size:13px;font-weight:600">Guided field kit &mdash; click a tool, read its note, interpret the output</span>
+      <a href="#1a" style="color:#5fd0e0;font-size:12px;text-decoration:none;margin-left:auto">&larr; compare 1a</a>
+    </div>
+    <div style="height:860px;border:1px solid #1e2c1e;border-radius:10px;overflow:hidden;background:#0b0f0b;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#0d130d;border-bottom:1px solid #172417">
+        <span style="width:11px;height:11px;border-radius:50%;background:#ff5f56;display:inline-block"></span>
+        <span style="width:11px;height:11px;border-radius:50%;background:#ffbd2e;display:inline-block"></span>
+        <span style="width:11px;height:11px;border-radius:50%;background:#27c93f;display:inline-block"></span>
+        <span style="color:#6f9a6f;font-size:12px;margin-left:8px">field-kit &mdash; case-8842</span>
+      </div>
+      <div style="flex:1;display:flex;min-height:0">
+        <div class="scr" style="width:300px;flex:none;border-right:1px solid #172417;padding:18px 16px;background:#0b0f0b;overflow:auto">
+          <div style="color:#9fe6ff;font-weight:700;font-size:12px;letter-spacing:.14em">MISSION STEPS</div>
+          <div style="color:#4f7a4f;font-size:11px;margin:4px 0 14px">click a step for guidance</div>
+          <sc-for list="{{ bSteps }}" as="s" hint-placeholder-count="7">
+            <div class="tbtn" onClick="{{ s.go }}" style="display:flex;gap:9px;padding:7px 6px;border-radius:6px;margin-bottom:3px;align-items:flex-start" style-hover="background:#101610">
+              <span style="{{ s.numStyle }}">{{ s.n }}</span>
+              <span style="{{ s.labStyle }}">{{ s.l }}</span>
+            </div>
+          </sc-for>
+          <div style="margin-top:18px;border-top:1px solid #1a271a;padding-top:12px;color:#4f7a4f;font-size:11px;line-height:1.65">tip: entropy shows you <span style="color:#e8b04b">candidates</span>, not the key. Only the <span style="color:#79d979">key-schedule</span> check tells a real key from compressed data / a nonce / a hash.</div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;background:#080b08;min-height:0">
+          <div style="padding:12px 16px;border-bottom:1px solid #172417;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+            <div class="tbtn" onClick="{{ bTrigger }}" style="padding:7px 12px;border:1px solid #2a3f24;border-radius:6px;background:#0e170e;color:#a7e6a7;font-size:12px;font-weight:600" style-hover="background:#152015">&#9658; trigger crypto</div>
+            <div class="tbtn" onClick="{{ bDump }}" style="padding:7px 12px;border:1px solid #2a3f24;border-radius:6px;background:#0e170e;color:#a7e6a7;font-size:12px;font-weight:600" style-hover="background:#152015">&#9660; SWD halt + dump</div>
+            <span style="width:1px;height:20px;background:#22331f"></span>
+            <div class="tbtn" onClick="{{ bStrings }}" style="padding:7px 11px;border:1px solid #24361f;border-radius:6px;background:#0d150d;color:#9fdf9f;font-size:12px" style-hover="background:#132013">strings</div>
+            <div class="tbtn" onClick="{{ bHexdump }}" style="padding:7px 11px;border:1px solid #24361f;border-radius:6px;background:#0d150d;color:#9fdf9f;font-size:12px" style-hover="background:#132013">hexdump</div>
+            <div class="tbtn" onClick="{{ bEntropy }}" style="padding:7px 11px;border:1px solid #24361f;border-radius:6px;background:#0d150d;color:#9fdf9f;font-size:12px" style-hover="background:#132013">entropy scan</div>
+          </div>
+          <div style="padding:11px 16px;border-bottom:1px solid #172417;display:flex;flex-wrap:wrap;gap:9px;align-items:center">
+            <span style="color:#4f7a4f;font-size:12px">region &rarr;</span>
+            <span style="color:#7f9a7f;font-size:12px">off</span>
+            <input class="fld" style="width:118px" value="{{ bOffset }}" onChange="{{ bOffChange }}" spellcheck="false" />
+            <span style="color:#7f9a7f;font-size:12px">len</span>
+            <input class="fld" style="width:72px" value="{{ bLen }}" onChange="{{ bLenChange }}" spellcheck="false" />
+            <div class="tbtn" onClick="{{ bHisto }}" style="padding:7px 11px;border:1px solid #24361f;border-radius:6px;background:#0d150d;color:#9fdf9f;font-size:12px" style-hover="background:#132013">histogram / &chi;&sup2;</div>
+            <div class="tbtn" onClick="{{ bKs }}" style="padding:7px 11px;border:1px solid #3a5a34;border-radius:6px;background:#111c0e;color:#c7f0b8;font-size:12px;font-weight:600" style-hover="background:#182611">keyschedule</div>
+            <div class="tbtn" onClick="{{ bCarve }}" style="padding:7px 11px;border:1px solid #24361f;border-radius:6px;background:#0d150d;color:#9fdf9f;font-size:12px" style-hover="background:#132013">carve</div>
+          </div>
+          <div class="scr" ref="{{ bRef }}" style="flex:1;overflow:auto;padding:16px 18px;font-size:13px;line-height:1.55;min-height:0">
+            <sc-for list="{{ bLines }}" as="line" hint-placeholder-count="3">
+              <div style="{{ line.style }}">{{ line.t }}</div>
+            </sc-for>
+          </div>
+          <div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid #172417;align-items:center;background:#0a0e0a">
+            <span style="color:#c9a15a;font-size:12px;flex:none">submit key</span>
+            <input class="fld" style="flex:1" placeholder="64 hex chars (32 bytes)" value="{{ bSubmit }}" onChange="{{ bSubmitChange }}" spellcheck="false" />
+            <div class="tbtn" onClick="{{ bSubmitDo }}" style="padding:7px 15px;border:1px solid #3a5a34;border-radius:6px;background:#16240f;color:#b6ff8f;font-weight:700;font-size:12px" style-hover="background:#1d3013">submit &#10003;</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:2860,&quot;height&quot;:980},&quot;palette&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;green&quot;,&quot;amber&quot;],&quot;default&quot;:&quot;green&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Theme&quot;},&quot;hints&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Difficulty&quot;}}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.init();
+    this.state = {
+      aLines: this.boot('a'), aInput:'', hist:[], hi:-1, aFlags:{},
+      bLines: this.boot('b'), bOffset:'0x0600', bLen:'32', bSubmit:'', bFlags:{}
+    };
+    this.imgA = null; this.imgB = null; this.trigA=false; this.trigB=false;
+  }
+
+  /* ---------- one-time image + crypto engine ---------- */
+  init(){
+    this.SBOX = [0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15,0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75,0x09,0x83,0x2c,0x1a,0x1b,0x6e,0x5a,0xa0,0x52,0x3b,0xd6,0xb3,0x29,0xe3,0x2f,0x84,0x53,0xd1,0x00,0xed,0x20,0xfc,0xb1,0x5b,0x6a,0xcb,0xbe,0x39,0x4a,0x4c,0x58,0xcf,0xd0,0xef,0xaa,0xfb,0x43,0x4d,0x33,0x85,0x45,0xf9,0x02,0x7f,0x50,0x3c,0x9f,0xa8,0x51,0xa3,0x40,0x8f,0x92,0x9d,0x38,0xf5,0xbc,0xb6,0xda,0x21,0x10,0xff,0xf3,0xd2,0xcd,0x0c,0x13,0xec,0x5f,0x97,0x44,0x17,0xc4,0xa7,0x7e,0x3d,0x64,0x5d,0x19,0x73,0x60,0x81,0x4f,0xdc,0x22,0x2a,0x90,0x88,0x46,0xee,0xb8,0x14,0xde,0x5e,0x0b,0xdb,0xe0,0x32,0x3a,0x0a,0x49,0x06,0x24,0x5c,0xc2,0xd3,0xac,0x62,0x91,0x95,0xe4,0x79,0xe7,0xc8,0x37,0x6d,0x8d,0xd5,0x4e,0xa9,0x6c,0x56,0xf4,0xea,0x65,0x7a,0xae,0x08,0xba,0x78,0x25,0x2e,0x1c,0xa6,0xb4,0xc6,0xe8,0xdd,0x74,0x1f,0x4b,0xbd,0x8b,0x8a,0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16];
+    this.RCON = [0x00,0x01,0x02,0x04,0x08,0x10,0x20,0x40];
+    const rng = (function(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};})(0x8842BEEF);
+    const rb = ()=>Math.floor(rng()*256);
+    const d = new Uint8Array(8192);
+    const wrLE=(o,v)=>{d[o]=v&255;d[o+1]=(v>>>8)&255;d[o+2]=(v>>>16)&255;d[o+3]=(v>>>24)&255;};
+    const wrStr=(o,s)=>{for(let i=0;i<s.length;i++)d[o+i]=s.charCodeAt(i);};
+    // vector table
+    wrLE(0x00,0x20002000); wrLE(0x04,0x08000ac9);
+    for(let o=0x08;o<0x100;o+=4) wrLE(o, 0x08000000 | ((rb()<<4)&0xfff0) | (rb()&0xf));
+    // .data strings (config + a red-herring ASCII "token")
+    wrStr(0x100,"IoT-Cam FW 2.3.1  build#8842\n");
+    wrStr(0x130,"device_sn=CAM-8842-ZX\n");
+    wrStr(0x150,"ota=mqtts://prov.acme-iot.net:8883\n");
+    wrStr(0x180,"prov_api_token=at_9f3c1b7e5a2d4088\n");
+    wrStr(0x1b0,"crypto=AES-256-GCM  mode=sw\n");
+    wrStr(0x1d0,"state: OTA session established\n");
+    // .bss counters
+    wrLE(0x300,0x00000017); wrLE(0x304,0x00000003);
+    // compressed OTA chunk 0x600-0x8FF (high-entropy DECOY, zlib header)
+    d[0x600]=0x78; d[0x601]=0x9c;
+    for(let o=0x602;o<0x900;o++) d[o]=rb();
+    // heap structs + 32B TLS-random nonce DECOY @0x980
+    wrLE(0x900,0x20000600); wrLE(0x904,0x00000300); wrStr(0x910,"heap#0\n");
+    for(let o=0x980;o<0x9a0;o++) d[o]=rb();
+    wrLE(0x9a0,0x20000980); wrLE(0x9c0,0x00000000);
+    // AES-256 KEY SCHEDULE @0xA00 (240B) — first 32 bytes are the master key
+    const key = new Uint8Array(32); for(let i=0;i<32;i++) key[i]=rb();
+    const sched = this.keyExpand(key);
+    for(let i=0;i<240;i++) d[0xA00+i]=sched[i];
+    this.answerHex = Array.from(key).map(b=>b.toString(16).padStart(2,'0')).join('');
+    // stack 0xAF0-0xFFF: return addrs, stack ptrs, repeated canary, low garbage
+    for(let o=0xAF0;o<0x1000;o+=4){
+      const r=rng();
+      if(r<0.35) wrLE(o, 0x08000000 | ((rb()<<3)&0xffff));
+      else if(r<0.52) wrLE(o, 0x200009c0 | (rb()&0x30));
+      else if(r<0.64) wrLE(o, 0xE2DE00A5);
+      else { d[o]=rb(); d[o+1]=rb(); d[o+2]=rb()&0x3f; d[o+3]=0; }
+    }
+    // SHA-256 digest DECOY @0xE40 (32B high entropy)
+    for(let o=0xE40;o<0xE60;o++) d[o]=rb();
+    this.dump = d;
+    // variant with key NOT resident (dump taken before a crypto op)
+    const dn = d.slice(); for(let i=0;i<240;i++) dn[0xA00+i]=0;
+    this.dumpNoKey = dn;
+
+    this.STEPS = [
+      ['01','Recon & trigger the crypto op'],
+      ['02','Halt core & dump SRAM'],
+      ['03','Survey \u2014 strings & hexdump'],
+      ['04','Entropy hunt for candidates'],
+      ['05','Disambiguate & validate schedule'],
+      ['06','Carve & submit the key'],
+      ['07','Debrief \u2014 design it out']
+    ];
+    this.buildFiles();
+  }
+
+  keyExpand(key){
+    const Nk=8, tot=60, w=new Uint8Array(240), t=new Uint8Array(4);
+    for(let i=0;i<32;i++) w[i]=key[i];
+    for(let i=Nk;i<tot;i++){
+      for(let k=0;k<4;k++) t[k]=w[(i-1)*4+k];
+      if(i%Nk===0){
+        const x=t[0]; t[0]=t[1]; t[1]=t[2]; t[2]=t[3]; t[3]=x;
+        for(let k=0;k<4;k++) t[k]=this.SBOX[t[k]];
+        t[0]^=this.RCON[i/Nk];
+      } else if(i%Nk===4){
+        for(let k=0;k<4;k++) t[k]=this.SBOX[t[k]];
+      }
+      for(let k=0;k<4;k++) w[i*4+k]=w[(i-Nk)*4+k]^t[k];
+    }
+    return w;
+  }
+
+  buildFiles(){
+    this.files = {
+      'notes.txt':
+"CASE 8842 \u2014 field notes\n"+
+"Seized: ACME IoT-Cam  (Cortex-M4, 8 KiB SRAM @ 0x20000000).\n"+
+"Firmware pins an AES-256 key in *software* and decrypts its OTA channel.\n"+
+"\n"+
+"Objective: recover the live AES-256 key from a halted-core SRAM image.\n"+
+"Lab 1.3 produced the dump over SWD. The key is only resident AFTER the\n"+
+"device performs a crypto op \u2014 trigger one, halt, dump, then hunt.\n"+
+"\n"+
+"Warnings:\n"+
+"  * Do NOT trust ASCII 'keys'/'tokens' in .data. The real key is 32 raw bytes.\n"+
+"  * Entropy finds noise; noise is also compression, nonces and hashes.\n"+
+"  * A software AES impl leaves a 240-byte KEY SCHEDULE in RAM \u2014 that is\n"+
+"    the structure that proves a key. Validate every candidate.\n",
+      'README':
+"toolkit:  tools/{entropy,hexdump,strings,histogram,keyschedule,carve}.py\n"+
+"start  :  cat notes.txt   then   help\n"+
+"read a tool before you trust it:  cat tools/keyschedule.py\n",
+      'tools/entropy.py':
+"#!/usr/bin/env python3\n"+
+"# entropy.py \u2014 sliding-window Shannon entropy over a memory image.\n"+
+"# usage: entropy.py <dump> [--window N]\n"+
+"#\n"+
+"# For each N-byte window: H = -sum p(b)*log2 p(b)  over byte values b.\n"+
+"# H in 0 (all one value) .. 8 (uniform/random). Keys, ciphertext AND\n"+
+"# compressed data all sit near 8 \u2014 entropy LOCATES candidates, it does\n"+
+"# not identify them. Cross-check every peak with histogram / keyschedule.\n",
+      'tools/hexdump.py':
+"#!/usr/bin/env python3\n"+
+"# hexdump.py \u2014 classic offset / hex / ASCII view of a region.\n"+
+"# usage: hexdump.py <dump> [--start 0xOFF] [--len N]\n",
+      'tools/strings.py':
+"#!/usr/bin/env python3\n"+
+"# strings.py \u2014 print printable ASCII runs (len>=4) with offsets.\n"+
+"# usage: strings.py <dump>\n"+
+"# Reveals config, URLs, tokens. NOTE: a raw AES key is high-entropy binary\n"+
+"# and will NOT appear here. An ASCII 'token' is not your key.\n",
+      'tools/histogram.py':
+"#!/usr/bin/env python3\n"+
+"# histogram.py \u2014 byte-value distribution + chi-square vs uniform.\n"+
+"# usage: histogram.py <dump> --start 0xOFF --len N\n"+
+"# A key, a nonce, a hash and zlib all pass a randomness test. chi-square\n"+
+"# CANNOT separate them. Use it to REJECT low-entropy regions, not to pick.\n",
+      'tools/keyschedule.py':
+"#!/usr/bin/env python3\n"+
+"# keyschedule.py \u2014 test whether 240 bytes are a live AES-256 key schedule.\n"+
+"# usage: keyschedule.py <dump> --offset 0xOFF\n"+
+"#\n"+
+"# Reads 32 bytes at OFF as a candidate master key, runs the AES-256 key\n"+
+"# expansion (14 rounds -> 240 bytes) and checks it against the following\n"+
+"# 208 bytes in the dump. Random/compressed blocks diverge immediately;\n"+
+"# only a real resident schedule verifies. This is the disambiguator.\n",
+      'tools/carve.py':
+"#!/usr/bin/env python3\n"+
+"# carve.py \u2014 extract a byte range to key.bin and print its hex.\n"+
+"# usage: carve.py <dump> --start 0xOFF --len N\n"
+    };
+  }
+
+  /* ---------- output helpers ---------- */
+  hints(){ return this.props.hints !== false; }
+  hx(a){ return Array.from(a).map(b=>b.toString(16).padStart(2,'0')).join(''); }
+  h4(n){ return '0x'+(n>>>0).toString(16).padStart(4,'0'); }
+  pn(s){ if(s==null) return null; s=(''+s).trim().replace(/_/g,''); if(s==='') return null; const v=/^0x/i.test(s)?parseInt(s,16):parseInt(s,10); return isNaN(v)?null:v; }
+  flagVal(parts,name){ for(let i=0;i<parts.length;i++){ const p=parts[i]; if(p==='--'+name) return this.pn(parts[i+1]); if(p.indexOf('--'+name+'=')===0) return this.pn(p.split('=')[1]); } return null; }
+
+  styleFor(k){
+    const amber = (this.props.palette||'green')==='amber';
+    const c = {
+      cmd: amber?'#caa257':'#8fdb8f', out: amber?'#e8b04b':'#79d979',
+      dim: amber?'#7d6a3c':'#4f7a4f', warn:'#e8b04b', err:'#ff6b6b',
+      ok: amber?'#ffd782':'#b6ff8f', accent:'#5fd0e0', head:'#9fe6ff'
+    }[k] || (amber?'#e8b04b':'#79d979');
+    return { color:c, whiteSpace:'pre-wrap', margin:0, fontWeight:(k==='ok'||k==='head')?700:400 };
+  }
+
+  boot(term){
+    const raw = term==='a'
+      ? [['head','CASE-8842 \u00b7 SRAM KEY-RECOVERY \u00b7 analyst shell'],
+         ['dim','ACME IoT-Cam \u00b7 Cortex-M4 \u00b7 SRAM 0x20000000\u20130x20002000 (8 KiB)'],
+         ['dim','\u2500'.repeat(52)],
+         ['out','Read the brief:  cat notes.txt      Toolkit:  help']]
+      : [['head','CASE-8842 \u00b7 Field Kit'],
+         ['dim','Click a tool to run it. Read each tool\u2019s note before trusting its output.'],
+         ['out','Start at the top: trigger the crypto op, then halt + dump.']];
+    return raw.map(x=>({k:x[0], t:x[1]}));
+  }
+  toLines(arr){ return arr.map(x=>({k:x[0], t:x[1]})); }
+  appendA(arr){ this.setState(s=>({aLines:[...s.aLines, ...this.toLines(arr)].slice(-1600)})); }
+  appendB(arr){ this.setState(s=>({bLines:[...s.bLines, ...this.toLines(arr)].slice(-1600)})); }
+  flagA(k){ this.setState(s=>({aFlags:{...s.aFlags,[k]:true}})); }
+  flagB(k){ this.setState(s=>({bFlags:{...s.bFlags,[k]:true}})); }
+
+  /* ---------- terminal (option a) ---------- */
+  aChange(e){ this.setState({aInput:e.target.value}); }
+  aKey(e){
+    if(e.key==='Enter'){ e.preventDefault(); this.run(); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); const h=this.state.hist; if(h.length){ const ni=Math.min(h.length-1,this.state.hi+1); this.setState({hi:ni,aInput:h[ni]}); } }
+    else if(e.key==='ArrowDown'){ e.preventDefault(); const h=this.state.hist; const ni=this.state.hi-1; if(ni<0) this.setState({hi:-1,aInput:''}); else this.setState({hi:ni,aInput:h[ni]}); }
+  }
+  run(){
+    const raw = this.state.aInput;
+    if(!raw.trim()){ this.appendA([['cmd','analyst@lab:~/case-8842$ ']]); return; }
+    const r = this.exec(raw);
+    this.appendA([['cmd','analyst@lab:~/case-8842$ '+raw], ...r.lines]);
+    this.setState(s=>({aInput:'', hist:[raw, ...s.hist].slice(0,60), hi:-1}));
+    if(r.did) this.flagA(r.did);
+    if(r.confirmed) this.flagA('conf');
+    if(r.solved){ this.flagA('solved'); this.flagA('conf'); }
+  }
+  exec(raw){
+    const rest = raw.trim();
+    const parts = rest.split(/\s+/);
+    const cmd = parts[0].toLowerCase();
+    if(/dump\s+binary\s+memory/i.test(rest)) return this.eng_dump('a');
+    if(cmd==='halt' || /monitor\s+halt/i.test(rest)) return this.eng_halt();
+    const readCmds = ['strings','hexdump','xxd','entropy','histogram','chi','chisq','keyschedule','ks','validate','carve'];
+    if(readCmds.includes(cmd) && !this.state.aFlags.dump)
+      return {lines:[['warn','sram.dump not found in cwd. Halt the core and dump SRAM first \u2014 step 02 (try: swd-dump).']]};
+    switch(cmd){
+      case 'help': return this.eng_help();
+      case 'ls': return this.eng_ls(this.state.aFlags.dump);
+      case 'cat': return this.eng_cat(parts[1]);
+      case 'notes.txt': return this.eng_cat('notes.txt');
+      case 'clear': this.setState({aLines:[]}); return {lines:[]};
+      case 'whoami': return {lines:[['out','analyst']]};
+      case 'pwd': return {lines:[['out','/home/analyst/case-8842']]};
+      case 'man': return this.eng_man(parts[1]);
+      case 'trigger': case 'run-crypto': return this.eng_trigger('a');
+      case 'target': return /trigger|crypto/i.test(rest)?this.eng_trigger('a'):{lines:[['out','usage: target trigger-crypto']]};
+      case 'openocd': return this.eng_openocd();
+      case 'gdb': case 'arm-none-eabi-gdb': return this.eng_gdb();
+      case 'swd-dump': case 'dump-sram': return this.eng_dump('a');
+      case 'strings': return this.coreStrings(this.imgA);
+      case 'hexdump': case 'xxd': return this.coreHexdump(this.imgA, this.flagVal(parts,'start')??0, this.flagVal(parts,'len')??256);
+      case 'entropy': return this.coreEntropy(this.imgA, this.flagVal(parts,'window')??32);
+      case 'histogram': case 'chi': case 'chisq': return this.coreHistogram(this.imgA, this.flagVal(parts,'start')??0, this.flagVal(parts,'len')??240);
+      case 'keyschedule': case 'ks': case 'validate': return this.coreKS(this.imgA, this.flagVal(parts,'offset'));
+      case 'carve': return this.coreCarve(this.imgA, this.flagVal(parts,'start')??0, this.flagVal(parts,'len')??32);
+      case 'submit': return this.coreSubmit(parts.slice(1).join(''));
+      case 'debrief': return this.eng_debrief();
+      default: return {lines:[['err','command not found: '+cmd+'   (try: help)']]};
+    }
+  }
+  aFocus(){ if(this.aInEl) this.aInEl.focus(); }
+  stepGuide(term, i){
+    const G = [
+      [['head','STEP 01 \u00b7 Recon & trigger'],['out','Read the brief:  cat notes.txt'],['out','The key is only in RAM AFTER a crypto op. Load it:  target trigger-crypto']],
+      [['head','STEP 02 \u00b7 Halt & dump'],['out','Halt the core over SWD/GDB and copy SRAM to a file:  swd-dump'],['dim','real sequence: openocd \u2192 gdb \u2192 monitor halt \u2192 dump binary memory sram.dump 0x20000000 0x20002000']],
+      [['head','STEP 03 \u00b7 Survey'],['out','strings sram.dump      config, URLs, tokens (an ASCII \u201ctoken\u201d is NOT the key)'],['out','hexdump sram.dump --start 0x100 --len 256']],
+      [['head','STEP 04 \u00b7 Entropy hunt'],['out','entropy sram.dump      maps every 32-byte window to H (0..8)'],['dim','note EVERY high-entropy region. Several will be decoys.']],
+      [['head','STEP 05 \u00b7 Disambiguate'],['out','histogram proves stats can\u2019t separate a key from compressed data.'],['out','keyschedule sram.dump --offset 0x<candidate>   only the real key\u2019s 14 round keys verify.']],
+      [['head','STEP 06 \u00b7 Carve & submit'],['out','carve sram.dump --start 0x<key> --len 32'],['out','submit <64 hex chars>']],
+      [['head','STEP 07 \u00b7 Debrief'],['out','debrief    where should this key have lived?']]
+    ];
+    const lines = G[i]||[];
+    if(term==='a') this.appendA(lines); else this.appendB(lines);
+  }
+
+  /* ---------- guided (option b) ---------- */
+  bOffChange(e){ this.setState({bOffset:e.target.value}); }
+  bLenChange(e){ this.setState({bLen:e.target.value}); }
+  bSubmitChange(e){ this.setState({bSubmit:e.target.value}); }
+  gB(){ if(!this.state.bFlags.dump){ this.appendB([['warn','sram.dump not found \u2014 run \u201cSWD halt + dump\u201d first (step 02).']]); return false; } return true; }
+  bTrigger(){ const r=this.eng_trigger('b'); this.appendB(r.lines); this.flagB('trig'); }
+  bDump(){ const r=this.eng_dump('b'); this.appendB(r.lines); this.flagB('dump'); }
+  bStrings(){ if(!this.gB())return; const r=this.coreStrings(this.imgB); this.appendB(r.lines); this.flagB('survey'); }
+  bHexdump(){ if(!this.gB())return; const r=this.coreHexdump(this.imgB, this.pn(this.state.bOffset)??0, this.pn(this.state.bLen)??256); this.appendB(r.lines); this.flagB('survey'); }
+  bEntropy(){ if(!this.gB())return; const r=this.coreEntropy(this.imgB,32); this.appendB(r.lines); this.flagB('scan'); }
+  bHisto(){ if(!this.gB())return; const r=this.coreHistogram(this.imgB, this.pn(this.state.bOffset)??0, this.pn(this.state.bLen)??240); this.appendB(r.lines); }
+  bKs(){ if(!this.gB())return; const r=this.coreKS(this.imgB, this.pn(this.state.bOffset)); this.appendB(r.lines); if(r.confirmed) this.flagB('conf'); }
+  bCarve(){ if(!this.gB())return; const r=this.coreCarve(this.imgB, this.pn(this.state.bOffset)??0, this.pn(this.state.bLen)??32); this.appendB(r.lines); }
+  bSubmitDo(){ const r=this.coreSubmit(this.state.bSubmit); this.appendB(r.lines); if(r.solved){ this.flagB('solved'); this.flagB('conf'); } }
+
+  /* ---------- text engines ---------- */
+  eng_help(){ return {lines:[
+    ['head','TOOLKIT \u00b7 case-8842'],
+    ['out','target trigger-crypto              load the AES key into SRAM (do this first)'],
+    ['out','swd-dump                           halt core over SWD/GDB, dump SRAM \u2192 sram.dump'],
+    ['out','strings sram.dump                  ASCII strings (config & tokens \u2014 decoys)'],
+    ['out','hexdump sram.dump --start 0x100 --len 256'],
+    ['out','entropy sram.dump [--window 32]    sliding Shannon-entropy map + candidates'],
+    ['out','histogram sram.dump --start 0x600 --len 256    distribution + chi-square'],
+    ['out','keyschedule sram.dump --offset 0x600           verify a 240-byte AES-256 schedule'],
+    ['out','carve sram.dump --start 0x600 --len 32         extract raw bytes \u2192 hex'],
+    ['out','submit <64 hex chars>              check a recovered AES-256 key'],
+    ['dim','cat <file> \u00b7 ls \u00b7 man <tool> \u00b7 debrief \u00b7 clear    (\u2191/\u2193 = history)']
+  ]}; }
+  eng_ls(dumped){ return {lines:[
+    ['out','notes.txt   README   tools/'],
+    ['out','tools/:  entropy.py  hexdump.py  strings.py  histogram.py  keyschedule.py  carve.py'],
+    dumped?['out','sram.dump   8192 bytes']:['dim','sram.dump   (not captured yet \u2014 run swd-dump)']
+  ]}; }
+  eng_cat(name){
+    if(!name) return {lines:[['err','usage: cat <file>']]};
+    let n=name.replace(/^\.\//,'');
+    if(n==='sram.dump') return {lines:[['err','sram.dump is binary \u2014 use hexdump / strings / entropy']]};
+    if(this.files[n]==null && this.files['tools/'+n]!=null) n='tools/'+n;
+    if(this.files[n]==null) return {lines:[['err','cat: '+name+': No such file']]};
+    return {lines:[['dim','\u2500 '+n+' \u2500'], ...this.files[n].split('\n').map(l=>['out',l])]};
+  }
+  eng_man(t){
+    const M={
+      entropy:'entropy \u2014 sliding-window Shannon entropy. Finds noise; cannot name it.',
+      hexdump:'hexdump \u2014 offset/hex/ASCII view. --start --len.',
+      strings:'strings \u2014 printable ASCII runs >=4. A key is binary; it will not show.',
+      histogram:'histogram \u2014 distribution + chi-square. Rejects structure, cannot pick a key from compressed data.',
+      keyschedule:'keyschedule \u2014 expands 32 bytes with AES-256 and checks the next 208 in RAM. The disambiguator.',
+      carve:'carve \u2014 extract a byte range to key.bin and print hex.'
+    };
+    if(!t) return {lines:[['out','man <entropy|hexdump|strings|histogram|keyschedule|carve>']]};
+    const k=t.replace(/^tools\//,'').replace(/\.py$/,'');
+    return {lines:[[M[k]?'out':'err', M[k]||('no manual entry for '+t)], ['dim','full source:  cat tools/'+k+'.py']]};
+  }
+  eng_trigger(term){
+    this['trig'+term.toUpperCase()] = true;
+    return {lines:[
+      ['dim','$ target trigger-crypto'],
+      ['out','[target] power 3v3 \u00b7 clk 48MHz \u00b7 core Cortex-M4'],
+      ['out','[target] fw 2.3.1: opening OTA session (AES-256-GCM, software crypto)'],
+      ['out','[target] aes256_expand_key(): 14 round keys written to SRAM'],
+      ['out','[target] decrypt block: OK'],
+      ['ok','[+] crypto op complete \u2014 AES-256 key is now LIVE in RAM.']
+    ], did:'trig'};
+  }
+  eng_halt(){ return {lines:[
+    ['out','[cortex_m4] halted: pc 0x08000ac2  xPSR 0x21000000  (RAM preserved)'],
+    ['dim','next:  dump binary memory sram.dump 0x20000000 0x20002000']
+  ]}; }
+  eng_openocd(){ return {lines:[
+    ['out','Info : SWD DPIDR 0x2ba01477'],
+    ['out','Info : [cortex_m4] Cortex-M4 r0p1 processor detected'],
+    ['out','Info : gdb port 3333, telnet port 4444']
+  ]}; }
+  eng_gdb(){ return {lines:[['dim','(gdb) ready \u2014 connect:  target extended-remote :3333']]}; }
+  eng_dump(term){
+    const resident = this['trig'+term.toUpperCase()];
+    this['img'+term.toUpperCase()] = resident ? this.dump : this.dumpNoKey;
+    const L=[
+      ['dim','$ openocd -f iot-cam.cfg &  arm-none-eabi-gdb'],
+      ['out','Info : SWD DPIDR 0x2ba01477'],
+      ['out','Info : [cortex_m4] Cortex-M4 r0p1 processor detected'],
+      ['dim','(gdb) target extended-remote :3333'],
+      ['dim','(gdb) monitor halt'],
+      ['out','[cortex_m4] halted: pc 0x08000ac2  xPSR 0x21000000'],
+      ['dim','(gdb) dump binary memory sram.dump 0x20000000 0x20002000']
+    ];
+    L.push(resident
+      ? ['ok','[+] sram.dump written \u2014 8192 bytes. AES key schedule is resident.']
+      : ['warn','[!] sram.dump written \u2014 8192 bytes. No crypto op ran this boot; key NOT resident. Trigger, then re-dump.']);
+    return {lines:L, did:'dump'};
+  }
+  eng_debrief(){ return {lines:[
+    ['head','DEBRIEF \u00b7 DESIGN IT OUT'],
+    ['out','The key was recoverable because it lived, in full, in general-purpose SRAM'],
+    ['out','that a halted debug core can read byte-for-byte. Fixes, strongest first:'],
+    ['out',''],
+    ['out','1. Never let raw key material reach CPU-readable RAM. Keep it in a secure'],
+    ['out','   element / hardware crypto engine with WRITE-ONLY key registers (key in,'],
+    ['out','   ciphertext out, key never reads back).'],
+    ['out','2. Non-exportable, hardware-bound keys (fuses / PUF / DICE-derived). A full'],
+    ['out','   RAM dump then yields nothing usable off-device.'],
+    ['out','3. Minimise RAM lifetime. If software crypto is unavoidable, zeroise the key'],
+    ['out','   schedule immediately after use (volatile memset_s), not \u201ceventually\u201d.'],
+    ['out','4. Lock the debug port: SWD/JTAG disable or RDP level 2, secure-boot gated.'],
+    ['out','   No halt, no dump.'],
+    ['out','5. Prefer a hardware AES peripheral over a software impl \u2014 the software impl'],
+    ['out','   is exactly what pinned a 240-byte schedule in SRAM for you to find.'],
+    ['warn','Reflect: your firmware needs the key ~2 ms every 30 s. Sketch a key'],
+    ['warn','lifecycle where a mid-operation core dump still reveals nothing.']
+  ]}; }
+
+  /* ---------- data-processing cores ---------- */
+  coreStrings(img){
+    const L=[['dim','strings \u00b7 min-len 4']];
+    let cur='', s=-1;
+    for(let o=0;o<=img.length;o++){
+      const b = o<img.length?img[o]:0;
+      if(b>=32 && b<127){ if(cur==='') s=o; cur+=String.fromCharCode(b); }
+      else { if(cur.length>=4) L.push(['out',this.h4(s)+'  '+cur]); cur=''; }
+    }
+    if(this.hints()) L.push(['dim','an ASCII \u201ctoken\u201d/\u201ckey\u201d string is config, not the 32-byte AES key.']);
+    return {lines:L, did:'survey'};
+  }
+  coreHexdump(img,start,len){
+    start=Math.max(0,start|0); len=Math.max(1,Math.min(len|0,2048));
+    const end=Math.min(img.length,start+len);
+    const L=[['dim','hexdump \u00b7 '+this.h4(start)+' \u2026 '+this.h4(end-1)]];
+    for(let o=start;o<end;o+=16){
+      let h='',a='';
+      for(let i=0;i<16;i++){
+        if(o+i<end){ const b=img[o+i]; h+=b.toString(16).padStart(2,'0')+' '; a+=(b>=32&&b<127)?String.fromCharCode(b):'.'; }
+        else { h+='   '; a+=' '; }
+        if(i===7) h+=' ';
+      }
+      L.push(['out',this.h4(o)+'  '+h+' |'+a+'|']);
+    }
+    return {lines:L, did:'survey'};
+  }
+  coreEntropy(img,win){
+    win=[16,32,64].includes(win)?win:32;
+    const cells=Math.floor(img.length/win);
+    const glyph=' .:-=+*oO#%@';
+    const Hmax=Math.log2(win);            // a win-byte window can hold at most win symbols
+    const thr=Hmax-0.45;                  // near-saturated windows = key/ciphertext/compressed/nonce/hash
+    const H=[];
+    for(let c=0;c<cells;c++){
+      const cnt=new Array(256).fill(0);
+      for(let i=0;i<win;i++) cnt[img[c*win+i]]++;
+      let h=0; for(let k=0;k<256;k++){ if(cnt[k]){ const p=cnt[k]/win; h-=p*Math.log2(p); } }
+      H.push(h);
+    }
+    const L=[['head','entropy map \u00b7 window='+win+'B \u00b7 glyph \u201c'+glyph+'\u201d = H 0\u2026'+Hmax.toFixed(1)+' (max for '+win+'B)']];
+    const per=64;
+    for(let r=0; r*per<cells; r++){
+      let s='';
+      for(let c=r*per; c<Math.min(cells,(r+1)*per); c++){
+        s += glyph[Math.min(glyph.length-1, Math.floor(H[c]/Hmax*(glyph.length-1)))];
+      }
+      L.push(['out',this.h4(r*per*win)+' '+s]);
+    }
+    const R=[]; let st=-1;
+    for(let c=0;c<=cells;c++){
+      const hi = c<cells && H[c]>=thr;
+      if(hi){ if(st<0) st=c; }
+      else if(st>=0){ R.push([st,c-1]); st=-1; }
+    }
+    L.push(['out','']);
+    L.push(['warn','saturated-entropy regions (H\u2265'+thr.toFixed(1)+' of '+Hmax.toFixed(1)+') \u2014 candidates, NOT identified:']);
+    if(!R.length) L.push(['dim','  none \u2014 did a crypto op run before the dump?']);
+    R.forEach(([a,b])=>{ const off=a*win, sz=(b-a+1)*win; let m=0; for(let c=a;c<=b;c++) m+=H[c]; m/=(b-a+1);
+      L.push(['warn','  '+this.h4(off)+'\u2013'+this.h4(off+sz-1)+'   '+sz+' B   H\u0304='+m.toFixed(2)]); });
+    if(this.hints()) L.push(['dim','a key, a nonce, a hash and zlib all saturate the same way. Validate each candidate with keyschedule.']);
+    return {lines:L, did:'scan'};
+  }
+  coreHistogram(img,start,len){
+    start=start|0; len=Math.max(1,Math.min(len|0,4096));
+    const end=Math.min(img.length,start+len), n=end-start;
+    const cnt=new Array(256).fill(0);
+    for(let o=start;o<end;o++) cnt[img[o]]++;
+    const exp=n/256; let H=0,distinct=0,chi=0;
+    for(let k=0;k<256;k++){ const c=cnt[k]; if(c){ distinct++; const p=c/n; H-=p*Math.log2(p); } chi+=(c-exp)*(c-exp)/exp; }
+    const L=[['dim','histogram \u00b7 '+this.h4(start)+' len '+n]];
+    L.push(['out','Shannon H  = '+H.toFixed(3)+' bits/byte   (max 8)']);
+    L.push(['out','distinct   = '+distinct+' / 256 byte values']);
+    L.push(['out','chi-square = '+chi.toFixed(1)+'   (uniform \u2248 255)']);
+    const near=Math.log2(Math.min(256,n))-0.5; // saturation ceiling for this sample size
+    if(n<64) L.push(['warn','verdict: only '+n+' bytes \u2014 too small for a reliable distribution test. Size the region to the full candidate and re-run, or go straight to keyschedule.']);
+    else if(H>=near) L.push(['warn','verdict: statistically random \u2014 could be a KEY, ciphertext, nonce, hash OR compressed data. Statistics CANNOT tell these apart. Test structure with keyschedule.']);
+    else if(H>=4.5) L.push(['out','verdict: mixed / structured binary \u2014 pointers, code or packed structs.']);
+    else L.push(['out','verdict: low entropy \u2014 ASCII / zeros / repeated values. Not a raw key.']);
+    return {lines:L};
+  }
+  coreKS(img,off){
+    if(off==null) return {lines:[['err','usage: keyschedule sram.dump --offset 0x<addr>']]};
+    off=off|0;
+    if(off<0 || off+240>img.length) return {lines:[['err','need 240 bytes for an AES-256 schedule; '+this.h4(off)+' + 240 exceeds the image.']]};
+    const cand=img.slice(off,off+32);
+    const exp=this.keyExpand(cand);
+    let bad=-1;
+    for(let j=32;j<240;j++){ if(exp[j]!==img[off+j]){ bad=j; break; } }
+    if(bad<0){
+      return {lines:[
+        ['ok','AES-256 key schedule VERIFIED @ '+this.h4(off)],
+        ['out','all 14 round keys expand consistently from the 32 bytes at '+this.h4(off)+'.'],
+        ['out','\u2192 this is a LIVE AES-256 key.  carve it:  carve sram.dump --start '+this.h4(off)+' --len 32']
+      ], confirmed:true, did:'conf'};
+    }
+    const word=Math.floor(bad/4);
+    return {lines:[
+      ['warn','AES-256 key schedule INVALID @ '+this.h4(off)],
+      ['out','round-key word w['+word+'] disagrees with the expansion (diverges at +0x'+bad.toString(16)+').'],
+      ['err','high entropy here, but this 240-byte block is NOT an AES-256 schedule.'],
+      ['dim','likely compressed data, a nonce or a hash. Try another candidate offset.']
+    ], confirmed:false};
+  }
+  coreCarve(img,start,len){
+    start=start|0; len=Math.max(1,Math.min(len|0,64));
+    const end=Math.min(img.length,start+len);
+    const hex=this.hx(img.slice(start,end));
+    return {lines:[
+      ['dim','carve \u00b7 '+this.h4(start)+' len '+len+' \u2192 key.bin'],
+      ['out',hex.replace(/(..)/g,'$1 ').trim()],
+      ['out',''],
+      ['out','hex: '+hex]
+    ]};
+  }
+  coreSubmit(hex){
+    const norm=(''+hex).toLowerCase().replace(/[^0-9a-f]/g,'');
+    if(norm.length!==64) return {lines:[['err','expected 64 hex chars (32 bytes); got '+norm.length+'. carve the key first.']]};
+    if(norm===this.answerHex){
+      const g=this.answerHex.match(/.{1,32}/g);
+      return {lines:[
+        ['ok','+==========================================+'],
+        ['ok','|   ACCESS GRANTED \u00b7 AES-256 KEY RECOVERED  |'],
+        ['ok','+==========================================+'],
+        ['out','recovered key:'],
+        ['out','  '+g[0]],
+        ['out','  '+g[1]],
+        ['head','why this worked'],
+        ['out','\u2022 software AES-256 pinned the full 240-byte key schedule in SRAM'],
+        ['out','\u2022 a halted debug core let you copy that SRAM byte-for-byte'],
+        ['out','\u2022 entropy found the noise; the schedule STRUCTURE proved the key'],
+        ['warn','next \u2192 run  debrief  : where should this key have lived?']
+      ], solved:true, did:'solved'};
+    }
+    let m=0; for(let i=0;i<32;i++){ if(norm.substr(i*2,2)===this.answerHex.substr(i*2,2)) m++; }
+    return {lines:[
+      ['err','INCORRECT \u2014 '+m+'/32 bytes match.'],
+      ['dim','re-check which high-entropy block passed keyschedule, then carve exactly 32 bytes.']
+    ]};
+  }
+
+  /* ---------- steps for sidebars ---------- */
+  mkSteps(term){
+    const f = term==='a'?this.state.aFlags:this.state.bFlags;
+    const keys=['trig','dump','survey','scan','conf','solved','solved'];
+    return this.STEPS.map((st,i)=>{
+      const d=!!f[keys[i]];
+      return {
+        n:st[0], l:st[1], go:()=>this.stepGuide(term,i),
+        numStyle:{display:'inline-block',minWidth:'22px',textAlign:'center',background:d?'#1c3a1c':'#101610',color:d?'#b6ff8f':'#557a55',border:'1px solid '+(d?'#2f5a2f':'#22331f'),borderRadius:'5px',padding:'2px 4px',fontSize:'11px',fontWeight:700,flex:'none'},
+        labStyle:{color:d?'#d4f2d4':'#82a082',fontSize:'12px',lineHeight:1.45}
+      };
+    });
+  }
+
+  componentDidUpdate(){
+    if(this.aEl) this.aEl.scrollTop=this.aEl.scrollHeight;
+    if(this.bEl) this.bEl.scrollTop=this.bEl.scrollHeight;
+  }
+  renderVals(){
+    return {
+      aLines: this.state.aLines.map(o=>({t:o.t, style:this.styleFor(o.k)})),
+      bLines: this.state.bLines.map(o=>({t:o.t, style:this.styleFor(o.k)})),
+      aInput: this.state.aInput,
+      bOffset: this.state.bOffset, bLen: this.state.bLen, bSubmit: this.state.bSubmit,
+      aSteps: this.mkSteps('a'), bSteps: this.mkSteps('b'),
+      aChange: e=>this.aChange(e), aKey: e=>this.aKey(e),
+      aRef: el=>this.aEl=el, aInRef: el=>this.aInEl=el, aFocus: ()=>this.aFocus(),
+      bRef: el=>this.bEl=el,
+      bOffChange:e=>this.bOffChange(e), bLenChange:e=>this.bLenChange(e), bSubmitChange:e=>this.bSubmitChange(e),
+      bTrigger:()=>this.bTrigger(), bDump:()=>this.bDump(), bStrings:()=>this.bStrings(),
+      bHexdump:()=>this.bHexdump(), bEntropy:()=>this.bEntropy(), bHisto:()=>this.bHisto(),
+      bKs:()=>this.bKs(), bCarve:()=>this.bCarve(), bSubmitDo:()=>this.bSubmitDo()
+    };
+  }
+}
+</script>
+</body>
+</html>
