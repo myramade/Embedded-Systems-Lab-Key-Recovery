@@ -7,6 +7,8 @@ The pedagogical point: entropy and statistics **locate** high-randomness regions
 
 The lab is fully self-contained: every script runs real math against a real (deterministically generated) byte image — Shannon entropy, chi-square, and a genuine AES-256 key expansion. There is no server; the "answer" is derived from the image, not hard-coded.
 
+Play ([https://myramade.github.io/sramlab/])
+
 ## About the Design Files
 The file in this bundle (`SRAM Key Recovery Lab.dc.html`) is a **design + behavior reference created in HTML** — a working prototype demonstrating the intended look, content, and interaction model. It is **not** production code to ship as-is. The task is to **recreate this lab in the target codebase's environment** (e.g. a React/Next courseware app, a Vue SPA, an LMS module, or a Python/Jupyter-backed lab runner) using that environment's established patterns, component library, and state management. If no environment exists yet, choose the most appropriate framework for an interactive terminal-style lab and implement there.
 
